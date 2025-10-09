@@ -1,16 +1,15 @@
 
 
 import { payInvoiceReponseToSourceOperation, } from './helpers';
-import { addNewOperation, addOptimisticOperation, removeOptimisticOperation, updateOptimsticOperation } from "./slice";
+import { addNewOperation, addOptimisticOperation, removeOptimisticOperation } from "./slice";
 import { type AppDispatch } from '../store';
 import { getNostrClient } from '@/Api/nostr';
-import type { SourceActualOperation, SourceOperationInvoice, SourceOptimsiticInvoice, SourceOptimsiticOnChain } from './types';
+import type { SourceActualOperation, SourceOperationInvoice, SourceOptimsiticInvoice } from './types';
 import type { SpendFrom } from '@/globalTypes';
 import { ShowToast } from '@/lib/contexts/useToast';
 import type { Satoshi } from '@/lib/types/units';
 import { formatSatoshi } from '@/lib/units';
 import { InputClassification, ParsedInput, ParsedInvoiceInput } from '@/lib/types/parse';
-import { getSourceInfo } from '../thunks/spendFrom';
 import { appCreateAsyncThunk } from '../appCreateAsyncThunk';
 import { OfferPriceType } from '@shocknet/clink-sdk';
 import { fetchHistoryForSource } from './thunks';
@@ -27,14 +26,12 @@ export const sendPaymentThunk = appCreateAsyncThunk(
 			parsedInput,
 			amount,
 			note,
-			satsPerVByte,
 			showToast
 		}: {
 			sourceId: string,
 			parsedInput: ParsedInput,
 			amount: Satoshi,
 			note?: string,
-			satsPerVByte: number,
 			showToast: ShowToast
 		}, {
 			dispatch, getState
@@ -225,67 +222,6 @@ export const sendPaymentThunk = appCreateAsyncThunk(
 
 				payInvoice(parsedInvoice, optimisticOperationId, optimsticOperation);
 				return;
-			}
-			case InputClassification.BITCOIN_ADDRESS: {
-
-
-
-				const optimisticOperation: SourceOptimsiticOnChain = {
-					optimistic: true,
-					sourceId,
-					operationId: optimisticOperationId,
-					amount: amount,
-					paidAtUnix: Date.now(),
-
-					status: "broadcasting",
-					type: "ON-CHAIN",
-					inbound: false,
-					address: parsedInput.data,
-					memo: note,
-				};
-
-				dispatch(addOptimisticOperation({ sourceId: selectedSource.id, operation: optimisticOperation }));
-
-				(async () => {
-					try {
-						const payRes = await (await getNostrClient(selectedSource.pasteField, selectedSource.keys)).PayAddress({
-							address: parsedInput.data,
-							amoutSats: amount,
-							satsPerVByte
-						})
-
-						if (payRes.status !== "OK") {
-							throw new Error(payRes.reason);
-						}
-
-						const isInternal = payRes.network_fee === 0;
-						let updatedOptimsticOperation: SourceOptimsiticOnChain;
-						if (isInternal) {
-							updatedOptimsticOperation = {
-								...optimisticOperation,
-								operationId: payRes.operation_id,
-								internal: true,
-								status: "success",
-								serviceFee: payRes.service_fee,
-							}
-						} else {
-							updatedOptimsticOperation = {
-								...optimisticOperation,
-								operationId: payRes.operation_id,
-								internal: false,
-								status: "confirming",
-								networkFee: payRes.network_fee,
-								serviceFee: payRes.service_fee,
-								txHash: payRes.txId,
-							}
-						}
-						dispatch(updateOptimsticOperation({ sourceId: selectedSource.id, operation: updatedOptimsticOperation, oldOperationId: optimisticOperationId }));
-						dispatch(getSourceInfo(sourceId));
-
-					} catch (err: any) {
-						handlePaymentError(err, dispatch, selectedSource.id, optimisticOperationId, showToast);
-					}
-				})();
 			}
 		}
 	});
