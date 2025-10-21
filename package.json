@@ -8,6 +8,7 @@
     "build:web": "rm -rf dist && ionic build --prod",
     "build:android": "rm -rf dist && CAPACITOR_PLATFORM=android ionic build --prod",
     "build:ios": "rm -rf dist && CAPACITOR_PLATFORM=ios ionic build --prod",
+    "deploy": "npm run build:web && gh-pages -d dist",
     "start:22k": "vite --port 22000",
     "dev": "vite",
     "preview": "vite preview",
